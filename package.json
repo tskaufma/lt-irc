@@ -1,0 +1,10 @@
+{
+  "name": "lt-irc",
+  "description": "lt-irc"
+  "main": "lt-irc_compiled.js",
+  "dependencies": {
+    "irc": "0.3.6"
+  },
+  "author": "tskaufma",
+  "license": "epl"
+}

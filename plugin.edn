@@ -1,0 +1,6 @@
+{:name "lt-irc"
+ :version "0.0.1"
+ :author "Trevor S. Kaufman"
+ :source "https://github.com/tskaufma/lt-irc"
+ :desc "Shows Clojure TODO and FIXME comments in a tab."
+ :behaviors "irc.behaviors"}
