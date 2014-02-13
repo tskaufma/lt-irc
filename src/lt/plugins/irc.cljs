@@ -7,18 +7,26 @@
             [lt.objs.editor :as editor]
             [lt.objs.console :as console]
             [lt.util.cljs :refer [js->clj]]
+            [lt.util.dom :as dom]
 
             [clojure.string :as string]
 
             [crate.binding :refer [bound subatom]])
-  (:require-macros [lt.macros :refer [defui behavior]]))
+  (:require-macros [lt.macros :refer [defui behavior extract]]))
 
 (object/object* ::tk
                 :name "TK"
-                :behaviors [::log-event ::on-close-destroy]
+                :behaviors [::log-event ::send-message ::on-close-destroy]
                 :init (fn [this]
-                        [:div {:style "overflow:scroll"}
-                         (bound this ui)]))
+                        [:div
+                         [:div {:style "overflow:scroll"}
+                           (bound this ui)]
+                         [:div {:style "position:absolute; bottom:0px; width: 100%;"}
+                           [:input.text {:type "text" :style "width: 85%"}]
+                           (send-button this)
+                          ]
+                         ]
+                         ))
 
 (defui ui [this]
   [:div
@@ -28,12 +36,27 @@
      )
     ]])
 
+(defui send-button [this]
+  [:input {:type "submit" :value "Send" :style "width: 13%;"}]
+                            :click (fn [e]
+                                     (let [info (extract (object/->content this)
+                                              [text :.text]
+                                              {:text (dom/val text)})]
+                                     (object/raise this :send "tskaufma4" "#lighttable-irc-test" (:text info)))
+                                     (dom/val (dom/$ ".text" (object/->content this)) "")))
+
 (behavior ::log-event
           :triggers #{:message}
           :reaction (fn [this from to message]
                       ;(console/log (str from " => " to ": " message))
                       (object/merge! tk {:messages (conj (:messages @this) {:from from :to to :message message})})
                      ))
+
+(behavior ::send-message
+          :triggers #{:send}
+          :reaction (fn [this from to message]
+                      (.say client to message)
+                      (object/raise this :message from to message)))
 
 (behavior ::on-close-destroy
           :triggers #{:close}
