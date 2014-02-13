@@ -15,36 +15,58 @@
 
 (object/object* ::tk
                 :name "TK"
-                :behaviors [::log-event]
+                :behaviors [::log-event ::on-close-destroy]
                 :init (fn [this]
-                        (ui this)))
+                        [:div {:style "overflow:scroll"}
+                         (bound this ui)]))
 
 (defui ui [this]
-  [:div])
+  [:div
+   [:ul
+    (for [msg (reverse (:messages this))]
+      [:li (str "" (:to msg) ": <" (:from msg) "> " (:message msg) "")]
+     )
+    ]])
 
 (behavior ::log-event
           :triggers #{:message}
-          :reaction (fn [from to message]
-                      (console/log (str from " => " to ": " message))))
+          :reaction (fn [this from to message]
+                      ;(console/log (str from " => " to ": " message))
+                      (object/merge! tk {:messages (conj (:messages @this) {:from from :to to :message message})})
+                     ))
+
+(behavior ::on-close-destroy
+          :triggers #{:close}
+          :reaction (fn [this]
+                      (when-let [ts (:lt.objs.tabs/tabset @this)]
+                        (when (= (count (:objs @ts)) 1)
+                          (tabs/rem-tabset ts)))
+                      (object/raise this :destroy)))
+
 
 (def tk (object/create ::tk))
+
+(tabs/add-or-focus! tk)
+
 (def irc (load/node-module "irc"))
 
 (def client (let [Client (.-Client irc)]
-  (new Client "irc.freenode.net" "tskaufma3" {:channels '("#lighttable")})))
+  (new Client "irc.freenode.net" "tskaufma4")))
 
-(.addListener client "message" (fn [from to message]
-                                 (console/error "a message recieved")
-                                 ;(object/raise tk :message from to message)
-                                 ))
+(defn msg-recieved [from to message]
+  ;(console/error (str "MSG: " message " !"))
+  (object/raise tk :message from to message)
+  )
 
-(.addListener client "error" (fn [message] (console/error "an error occured")))
+(.addListener client "message" msg-recieved)
 
-(.join client "#lighttable")
+(.addListener client "error" (fn [message] (console/error (str "an error occured"))))
 
-(.part client "#lighttable")
+(.join client "#lighttable-irc-test")
 
-(.say client "#lighttable" "test")
+(.part client "#lighttable-irc-test")
+
+(.say client "#lighttable-irc-test" "test")
 
 (.disconnect client)
 
