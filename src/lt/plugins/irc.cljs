@@ -22,7 +22,7 @@
                          [:div {:style "overflow:scroll"}
                            (bound this ui)]
                          [:div {:style "position:absolute; bottom:0px; width: 100%;"}
-                           [:input.text {:type "text" :style "width: 85%"}]
+                           (input-text this)
                            (send-button this)
                           ]
                          ]
@@ -36,14 +36,23 @@
      )
     ]])
 
+(defn handle-message [this]
+  (let [info (extract (object/->content this)
+               [text :.text]
+               {:text (dom/val text)})]
+       (object/raise this :send "tskaufma4" "#lighttable-irc-test" (:text info)))
+       (dom/val (dom/$ ".text" (object/->content this)) ""))
+
+(defui input-text [this]
+  [:input.text {:type "text" :style "width: 85%"}]
+   :keydown (fn [e]
+              (if (= (aget e "keyCode") 13)
+                (handle-message this))))
+
 (defui send-button [this]
   [:input {:type "submit" :value "Send" :style "width: 13%;"}]
                             :click (fn [e]
-                                     (let [info (extract (object/->content this)
-                                              [text :.text]
-                                              {:text (dom/val text)})]
-                                     (object/raise this :send "tskaufma4" "#lighttable-irc-test" (:text info)))
-                                     (dom/val (dom/$ ".text" (object/->content this)) "")))
+                                     (handle-message this)))
 
 (behavior ::log-event
           :triggers #{:message}
