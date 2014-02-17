@@ -22,7 +22,7 @@
                 :behaviors [::log-raw ::on-close-destroy ::on-destory-disconnect]
                 :init (fn [this]
                         [:div
-                         [:p (join-button this "#lighttable-irc-test")]
+                         [:p (join-button this)]
                          [:div {:style "overflow:scroll;width:100%;height:90%;"}
                            (bound this ui-raw)]
                          ]
@@ -47,7 +47,7 @@
 (defn add-listener [this client event listener]
   (object/merge! this {:irc-events (conj (:irc-events @this) {:event event :listener listener})})
   (.addListener client event listener)
-  (console/log (str "Added Listener for [" event "]"))
+  ;(console/log (str "Added Listener for [" event "]"))
  )
 
 (defn remove-listeners [this client]
@@ -68,7 +68,7 @@
                                           (object/raise this :message from channel text)))
                           (add-listener this c (str "names" channel)
                                         (fn [nicks]
-                                          (console/log (str "names-listener " (js->clj nicks)))
+                                          ;(console/log (str "names-listener " (js->clj nicks)))
                                           (object/merge! this {:nicks (js->clj nicks)})))
                           (.join c channel)
                           )
@@ -76,14 +76,14 @@
                         [:div {:style "width:100%" }
                          [:div {:style "border: 0px solid red;float:right;width:20%"}
                           [:h2 "Nicks"]
-                          [:div {:style "overflow:scroll; width:100%;height:50%;"}
+                          [:div {:style "overflow:scroll; width:100%;height:90%;"}
                            (bound (subatom this :nicks) nick-list)]
-                          [:div {:style "overflow:scroll; width:100%;height:50%;"}
-                           (bound (subatom this :irc-events) (fn [ls]
-                                                              [:ul
-                                                               (for [l ls]
-                                                                 [:li (str "e: " (:event l))])
-                                                               ]))]
+                          ;[:div {:style "overflow:scroll; width:100%;height:50%;"}
+                          ; (bound (subatom this :irc-events) (fn [ls]
+                          ;                                    [:ul
+                          ;                                     (for [l ls]
+                          ;                                       [:li (str "e: " (:event l))])
+                          ;                                     ]))]
                           ]
                          [:div {:style "border: 0px solid pink;float:left;width:80%;"}
                           [:div {:style "overflow:scroll; width:100%;height:95%;"}
@@ -146,16 +146,30 @@
                             :click (fn [e]
                                      (handle-message this)))
 
-(defui join-button [this channel]
-  [:input {:type submit :value (str "Join " channel)}]
+(defui join-button [this]
+  [:input {:type submit :value (str "Join a channel")}]
   :click (fn [e]
-           (tabs/add-or-focus! (object/create ::irc-window this channel)))
-  )
+           (let [channel (popup-input)]
+             (popup/popup!
+              {
+               :header "Connect to IRC Channel"
+                          :body [:div
+                                 [:p "Enter channel to join."]
+                                 [:label "Channel: "]
+                                 channel
+                                 ]
+                          :buttons [{:label "cancel"}
+                                    {:label "connect"
+                                     :action (fn []
+                                               (let [channel (dom/val channel)]
+                                                 ;(console/log (str "Joining Channel " channel))
+                                                 (tabs/add-or-focus! (object/create ::irc-window this channel)))
+                                               )}]
+               }))))
 
 (behavior ::log-event
           :triggers #{:message}
           :reaction (fn [this from to message]
-                      ;(console/log (str from " => " to ": " message))
                       (object/merge! this {:messages (conj (:messages @this) {:from from
                                                                               :to to
                                                                               :message message
@@ -181,9 +195,7 @@
                       (when-let [ts (:lt.objs.tabs/tabset @this)]
                         (when (= (count (:objs @ts)) 1)
                           (tabs/rem-tabset ts)))
-                      (console/log "pre-pre-destroy")
                       (object/raise this :pre-destroy)
-                      (console/log "post-pre-deploy. pre-destroy.")
                       (object/raise this :destroy)
                       (object/destroy! this)))
 
@@ -204,32 +216,6 @@
                         (.removeAllListeners client))
                       ))
 
-;(def tk (object/create ::tk))
-
-;(tabs/add-or-focus! tk)
-
-
-
-;(def client (let [Client (.-Client irc)]
-;  (new Client "irc.freenode.net" "tskaufma4")))
-
-;(defn msg-recieved [from to message]
-;  ;(console/error (str "MSG: " message " !"))
-;  (object/raise tk :message from to message)
-;  )
-
-;(.addListener client "message" msg-recieved)
-
-;(.addListener client "error" (fn [message] (console/error (str "an error occured"))))
-
-;(.join client "#lighttable-irc-test")
-
-;(.part client "#lighttable-irc-test")
-
-;(.say client "#lighttable-irc-test" "test")
-
-;(.disconnect client)
-
 (defui popup-input []
   [:input {:type "text"}])
 
@@ -240,16 +226,14 @@
                             nickname (popup-input)]
                         (popup/popup!
                          {
-                          :header "TK Test Popup"
+                          :header "Connect to IRC Server"
                           :body [:div
-                                 [:p "Did this work?"]
+                                 [:p "Enter server to connect to and Nickname to use."]
                                  [:label "Server: "]
                                  server
 
                                  [:label "Nickname: "]
                                  nickname
-
-                                 [:p "Woof"]
                                  ]
                           :buttons [{:label "cancel"}
                                     {:label "connect"
@@ -257,18 +241,8 @@
                                                (let [server (dom/val server)
                                                      nickname (dom/val nickname)
                                                      irc-client (object/create ::irc-client)]
-                                                 (console/log (str "Server: " server " Nickname: " nickname))
+                                                ; (console/log (str "Server: " server " Nickname: " nickname))
                                                  (connect irc-client server nickname)
                                                  (tabs/add-or-focus! irc-client)
                                                  ))}]
                           })))})
-
-;; Find instances
-(object/instances-by-type ::irc-client)
-
-(object/instances-by-type ::irc-window)
-
-(for [instance (object/instances-by-type ::irc-client)]
-  (object/destroy! instance)
-  ;(object/raise instance :destroy)
-  )
