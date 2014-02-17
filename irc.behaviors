@@ -1,0 +1,1 @@
+{:+ {:app [(:lt.objs.plugins/load-js "lt-irc_compiled.js")]}}

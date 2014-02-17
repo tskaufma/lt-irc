@@ -4,9 +4,10 @@ lt-irc
 IRC Client for LightTable
 
 
-Incomplete
+Documentation
 ==============
 
-This project is not in a useable state. It contains the initial experiements of getting node-irc running in lighttable to make an irc client.
+This project provides a primative IRC client based on node-irc for LightTable. One can connect to a server using a nickname, and join channels and send/recieve messages.
 
-This does not create any usable UI or commands in LightTable yet.
+Authentication, login and other features are not yet implemented.
+
