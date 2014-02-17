@@ -19,12 +19,12 @@
 
 (object/object* ::irc-client
                 :name "IRC Client"
-                :behaviors [::log-event ::on-close-destroy ::on-destory-disconnect]
+                :behaviors [::log-raw ::on-close-destroy ::on-destory-disconnect]
                 :init (fn [this]
                         [:div
                          [:p (join-button this "#lighttable-irc-test")]
-                         [:div {:style "overflow:scroll"}
-                           (bound this ui)]
+                         [:div {:style "overflow:scroll;width:100%;height:90%;"}
+                           (bound this ui-raw)]
                          ]
                         ))
 
@@ -34,15 +34,25 @@
     (object/merge! irc-client {:client client
                                :nickname nickname
                                :server server
-                               :info {
-                                      :name (str nickname "@" server)}})
-    (.addListener client "message"
-                  (fn [from to message]
-                    (object/raise irc-client :message from to message)))
+                               :info {:name (str nickname "@" server)}})
+    (.addListener client "raw"
+                  (fn [message]
+                    (object/raise irc-client :raw message)))
     (.addListener client "error"
                   (fn [message]
                     (console/error (str "an error occured " (aget message "command") ". " (aget message "args")))))
     ))
+
+
+(defn add-listener [this client event listener]
+  (object/merge! this {:irc-events (conj (:irc-events @this) {:event event :listener listener})})
+  (.addListener client event listener)
+  (console/log (str "Added Listener for [" event "]"))
+ )
+
+(defn remove-listeners [this client]
+  (map #(.removeAllListeners client (:event %)) (:irc-events @this))
+  (object/merge! this {:irc-events []}))
 
 (object/object* ::irc-window
                 :name "IRC Window"
@@ -50,29 +60,73 @@
                 :init (fn [this client channel]
                         (object/merge! this {:client client
                                              :channel channel
-                                             :info {
-                                                    :name channel}})
-                        (.addListener (:client @client) (str "message" channel)
+                                             :info {:name channel}
+                                             })
+                        (let [c (:client @client)]
+                          (add-listener this c (str "message" channel)
                                         (fn [from text message]
                                           (object/raise this :message from channel text)))
-                        (.join (:client @client) channel)
-                        [:div
-                         [:div {:style "overflow:scroll"}
+                          (add-listener this c (str "names" channel)
+                                        (fn [nicks]
+                                          (console/log (str "names-listener " (js->clj nicks)))
+                                          (object/merge! this {:nicks (js->clj nicks)})))
+                          (.join c channel)
+                          )
+
+                        [:div {:style "width:100%" }
+                         [:div {:style "border: 0px solid red;float:right;width:20%"}
+                          [:h2 "Nicks"]
+                          [:div {:style "overflow:scroll; width:100%;height:50%;"}
+                           (bound (subatom this :nicks) nick-list)]
+                          [:div {:style "overflow:scroll; width:100%;height:50%;"}
+                           (bound (subatom this :irc-events) (fn [ls]
+                                                              [:ul
+                                                               (for [l ls]
+                                                                 [:li (str "e: " (:event l))])
+                                                               ]))]
+                          ]
+                         [:div {:style "border: 0px solid pink;float:left;width:80%;"}
+                          [:div {:style "overflow:scroll; width:100%;height:95%;"}
                            (bound this ui)]
-                         [:div {:style "position:absolute; bottom:0px; width: 100%;"}
-                           (input-text this)
-                           (send-button this)
+                          [:div {:style "position:absolute; bottom:0px; width: 100%;"}
+                           [:span (:nickname @client)]
+                            (send-button this)
+                            (input-text this)
+                           ]
                           ]
                          ]
-                         ))
+                        ))
+
+(defn decimal-parts
+  "split a 1 or 2 digit number into its decimal parts
+   e.g. 53 => [5 3], 9 => [0 9]"
+  [n]
+  [(quot n 10) (mod n 10)])
+
+(defn format-time [date]
+  (str "" (reduce str "" (decimal-parts (.getHours date))) ":" (reduce str "" (decimal-parts (.getMinutes date)))))
 
 (defui ui [this]
   [:div
    [:ul
     (for [msg (reverse (:messages this))]
-      [:li (str "" (:to msg) ": <" (:from msg) "> " (:message msg) "")]
+      [:li (str "[" (format-time (:time msg)) "] <" (:from msg) "> " (:message msg) "")]
      )
     ]])
+
+(defui ui-raw [this]
+  [:div
+   [:ul
+    (for [msg (reverse (:raw-msgs this))]
+      [:li (str "[" (format-time (:time msg)) "] " (aget (:message msg) "command") ". " (aget (:message msg) "args") "")]
+     )
+    ]])
+
+(defui nick-list [nicks]
+  [:ul
+   (for [[nick status] nicks]
+     [:li (str status nick)])
+   ])
 
 (defn handle-message [this]
   (let [info (extract (object/->content this)
@@ -88,7 +142,7 @@
                 (handle-message this))))
 
 (defui send-button [this]
-  [:input {:type "submit" :value "Send" :style "width: 13%;"}]
+  [:input {:type "submit" :value "Send"}]
                             :click (fn [e]
                                      (handle-message this)))
 
@@ -102,7 +156,17 @@
           :triggers #{:message}
           :reaction (fn [this from to message]
                       ;(console/log (str from " => " to ": " message))
-                      (object/merge! this {:messages (conj (:messages @this) {:from from :to to :message message})})
+                      (object/merge! this {:messages (conj (:messages @this) {:from from
+                                                                              :to to
+                                                                              :message message
+                                                                              :time (js/Date.)})})
+                     ))
+
+(behavior ::log-raw
+          :triggers #{:raw}
+          :reaction (fn [this message]
+                      (object/merge! this {:raw-msgs (conj (:raw-msgs @this) {:message message
+                                                                              :time (js/Date.)})})
                      ))
 
 (behavior ::send-message
@@ -117,19 +181,28 @@
                       (when-let [ts (:lt.objs.tabs/tabset @this)]
                         (when (= (count (:objs @ts)) 1)
                           (tabs/rem-tabset ts)))
-                      (object/raise this :destroy)))
+                      (console/log "pre-pre-destroy")
+                      (object/raise this :pre-destroy)
+                      (console/log "post-pre-deploy. pre-destroy.")
+                      (object/raise this :destroy)
+                      (object/destroy! this)))
 
 (behavior ::on-destory-part
-          :triggers #{:destroy}
+          :triggers #{:pre-destroy}
           :reaction (fn [this]
                       (let [client (:client @(:client @this))]
-                        (.part client (:channel @this)))))
+                        (.part client (:channel @this))
+                        (remove-listeners this client)
+                        )
+                      ))
 
 (behavior ::on-destory-disconnect
-          :triggers #{:destroy}
+          :triggers #{:pre-destroy}
           :reaction (fn [this]
                       (let [client (:client @this)]
-                        (.disconnect client))))
+                        (.disconnect client)
+                        (.removeAllListeners client))
+                      ))
 
 ;(def tk (object/create ::tk))
 
@@ -189,3 +262,13 @@
                                                  (tabs/add-or-focus! irc-client)
                                                  ))}]
                           })))})
+
+;; Find instances
+(object/instances-by-type ::irc-client)
+
+(object/instances-by-type ::irc-window)
+
+(for [instance (object/instances-by-type ::irc-client)]
+  (object/destroy! instance)
+  ;(object/raise instance :destroy)
+  )
