@@ -6,6 +6,7 @@
             [lt.objs.editor.pool :as pool]
             [lt.objs.editor :as editor]
             [lt.objs.console :as console]
+            [lt.objs.plugins :as plugins]
             [lt.objs.popup :as popup]
             [lt.util.cljs :refer [js->clj]]
             [lt.util.dom :as dom]
@@ -15,7 +16,7 @@
             [crate.binding :refer [bound subatom]])
   (:require-macros [lt.macros :refer [defui behavior extract]]))
 
-(def irc (load/node-module "irc"))
+(def irc (js/require (plugins/local-module "lt-irc" "irc")))
 
 (object/object* ::irc-client
                 :name "IRC Client"
